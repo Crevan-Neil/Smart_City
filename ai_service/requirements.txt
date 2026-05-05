@@ -1,0 +1,21 @@
+# ── AI service dependencies ───────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-dotenv==1.0.1
+pydantic==2.7.1
+pydantic-settings==2.2.1
+
+# LLM + RAG
+langchain==0.2.1
+langchain-google-genai==1.0.8   # swap for langchain-openai if using GPT
+google-generativeai==0.7.2      # support for gemini-1.5-flash
+# langchain-openai==0.1.7       # uncomment if using OpenAI instead
+
+# Database clients
+motor==3.4.0                    # async MongoDB driver
+pymongo<4.9                     # fix compatibility with motor
+redis==5.0.4                    # Redis for reading hot state cache
+
+# Streaming
+sse-starlette==2.1.0            # Server-Sent Events for /chat endpoint
+httpx==0.27.0

@@ -1,0 +1,196 @@
+# ─────────────────────────────────────────────
+#  SMART CITY DIGITAL TWIN — docker-compose.yml
+# ─────────────────────────────────────────────
+
+networks:
+  city_net:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  influx_data:
+  redis_data:
+  backend_node_modules:
+  frontend_node_modules:
+
+services:
+
+  # ── 1. INFRASTRUCTURE ──────────────────────
+
+  mongodb:
+    image: mongo:7
+    container_name: city_mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASS:-citypass}
+      MONGO_INITDB_DATABASE: smart_city
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - city_net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: city_redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"  # Mapped to 6380 to avoid conflict with your existing Redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - city_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: city_influx
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USER:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASS:-citypass123}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-smart_city_org}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET:-city_sensors}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN:-my-super-secret-token}
+    volumes:
+      - influx_data:/var/lib/influxdb2
+    networks:
+      - city_net
+    healthcheck:
+      test: ["CMD-SHELL", "influx ping || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── 2. SIMULATION (Python · FastAPI) ────────
+
+  simulation:
+    build:
+      context: ./simulation
+      dockerfile: Dockerfile
+    container_name: city_simulation
+    restart: unless-stopped
+    ports:
+      - "8002:8000"
+    environment:
+      # Note: Still using 6379 for internal container-to-container talk
+      REDIS_URL: redis://city_redis:6379
+      REDIS_CHANNEL: city:live
+      SIM_INTERVAL_SEC: 2
+      PYTHONUNBUFFERED: 1
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - city_net
+    volumes:
+      - ./simulation:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ── 3. BACKEND (Node.js · Express) ──────────
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: city_backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      MONGO_URI: mongodb://${MONGO_USER:-admin}:${MONGO_PASS:-citypass}@city_mongo:27017/smart_city?authSource=admin
+      REDIS_URL: redis://city_redis:6379
+      REDIS_CHANNEL: city:live
+      INFLUX_URL: http://city_influx:8086
+      INFLUX_TOKEN: ${INFLUX_TOKEN:-my-super-secret-token}
+      INFLUX_ORG: ${INFLUX_ORG:-smart_city_org}
+      INFLUX_BUCKET: ${INFLUX_BUCKET:-city_sensors}
+      CLIENT_ORIGIN: http://localhost:5173
+      SIM_URL: http://city_simulation:8000
+      AI_SERVICE_URL: http://city_ai:8001
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+      NODE_ENV: development
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+    networks:
+      - city_net
+    volumes:
+      - ./backend:/app
+      - backend_node_modules:/app/node_modules
+    command: npm run dev
+
+  # ── 4. AI SERVICE (Python · FastAPI) ────────
+
+  ai_service:
+    build:
+      context: ./ai_service
+      dockerfile: Dockerfile
+    container_name: city_ai
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      MONGO_URI: mongodb://${MONGO_USER:-admin}:${MONGO_PASS:-citypass}@city_mongo:27017/smart_city?authSource=admin
+      REDIS_URL: redis://city_redis:6379
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL:-gemini-3-flash-preview}
+      JWT_SECRET: ${JWT_SECRET}
+      PYTHONUNBUFFERED: 1
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - city_net
+    volumes:
+      - ./ai_service:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+
+  # ── 5. FRONTEND (React · Vite) ──────────────
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: city_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      # These point to localhost because they run in the browser
+      VITE_API_URL: http://localhost:3001
+      VITE_SOCKET_URL: http://localhost:3001
+      VITE_AI_URL: http://localhost:8001
+    depends_on:
+      - backend
+      - ai_service
+    networks:
+      - city_net
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    command: npm run dev -- --host

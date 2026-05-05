@@ -1,0 +1,46 @@
+# ─────────────────────────────────────────────
+#  SMART CITY DIGITAL TWIN — .gitignore
+# ─────────────────────────────────────────────
+
+# Environment — NEVER commit secrets
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+dist/
+.next/
+build/
+*.log
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Docker volumes (if mounted locally)
+mongo_data/
+influx_data/
+redis_data/
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# 3D assets (large binaries — use Git LFS instead)
+*.glb
+*.gltf
+*.fbx
+*.blend

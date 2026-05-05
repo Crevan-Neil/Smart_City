@@ -1,0 +1,137 @@
+/* ─────────────────────────────────────────────
+   index.css — global styles
+   Smart City Digital Twin
+   Aesthetic: Cyberpunk control room
+   ───────────────────────────────────────────── */
+
+/* ── Fonts ── */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+/* ── CSS Variables ── */
+:root {
+  /* Colours */
+  --c-bg:           #06121e;
+  --c-bg-2:         #0a1f33;
+  --c-bg-3:         #0d2540;
+  --c-border:       rgba(0, 229, 255, 0.12);
+  --c-border-faint: rgba(0, 229, 255, 0.06);
+
+  /* Accents */
+  --c-cyan:         #00e5ff;
+  --c-green:        #00e5a0;
+  --c-amber:        #f59e0b;
+  --c-red:          #ef4444;
+  --c-purple:       #a855f7;
+
+  /* Text */
+  --c-text-1:       #e2f4ff;
+  --c-text-2:       #7a9bb5;
+  --c-text-3:       #2a4a6a;
+
+  /* Fonts */
+  --font-mono:      'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-sans:      'Inter', system-ui, sans-serif;
+}
+
+/* ── Reset ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--c-bg);
+  color: var(--c-text-1);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 255, 0.15);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 229, 255, 0.3);
+}
+
+/* ── Selection ── */
+::selection {
+  background: rgba(0, 229, 255, 0.2);
+  color: var(--c-cyan);
+}
+
+/* ── Focus ring ── */
+:focus-visible {
+  outline: 1px solid var(--c-cyan);
+  outline-offset: 2px;
+}
+
+/* ── Utility animations ── */
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scanline {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+/* ── Glassmorphism utility ── */
+.glass {
+  background: rgba(4, 12, 22, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--c-border);
+}
+
+/* ── Scanline overlay (optional atmosphere) ── */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ── Canvas fills parent ── */
+canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
