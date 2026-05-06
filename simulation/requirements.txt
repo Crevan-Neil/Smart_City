@@ -7,3 +7,4 @@ numpy==1.26.4         # sine wave + random walk math
 pydantic==2.7.1       # request/response validation
 httpx==0.27.0         # async HTTP (for calling backend if needed)
 pydantic-settings==2.2.1
+prometheus-fastapi-instrumentator==7.0.0

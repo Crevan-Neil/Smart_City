@@ -1,0 +1,17 @@
+# ─────────────────────────────────────────────
+#  monitoring/grafana/provisioning/dashboards/dashboard.yml
+#  Tells Grafana to auto-load dashboards from
+#  the /dashboards folder on first boot.
+# ─────────────────────────────────────────────
+
+apiVersion: 1
+
+providers:
+  - name: Smart City Dashboards
+    orgId: 1
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

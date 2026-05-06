@@ -1,0 +1,21 @@
+# ─────────────────────────────────────────────
+#  monitoring/grafana/provisioning/datasources/prometheus.yml
+#  Auto-provisions Prometheus as the default
+#  Grafana datasource on first boot.
+#  No manual UI setup required.
+# ─────────────────────────────────────────────
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    # Grafana reaches Prometheus via Docker network
+    url: http://city_prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: "15s"
+      httpMethod: POST
