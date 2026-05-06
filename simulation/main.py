@@ -2,6 +2,7 @@
 #  simulation/main.py — FastAPI entry point
 #  Simulation microservice:
 #    GET  /health    → liveness check
+#    GET  /metrics   → Prometheus scrape endpoint
 #    POST /trigger   → inject a sim event
 #    POST /start     → start the sim loop
 #    POST /stop      → stop the sim loop
@@ -13,11 +14,27 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter, Gauge
 
 from config import settings
 from publisher.redis_pub import init_redis, close_redis
 from generator.sim_loop import SimLoop
 from middleware.rate_limiter import SimRateLimitMiddleware, cleanup_all
+
+# ── Custom Prometheus metrics ─────────────────
+
+# Counter — total number of simulation ticks published to Redis
+simulation_ticks_total = Counter(
+    "simulation_ticks_total",
+    "Total number of simulation ticks generated and published to Redis",
+)
+
+# Gauge — 1 if the sim loop is running, 0 if stopped
+simulation_loop_running = Gauge(
+    "simulation_loop_running",
+    "Whether the simulation tick loop is currently running (1=yes, 0=no)",
+)
 
 # ── Global sim loop instance ──────────────────
 sim_loop: SimLoop | None = None
@@ -33,6 +50,7 @@ async def lifespan(app: FastAPI):
     # Boot the sim loop immediately on startup
     sim_loop = SimLoop()
     asyncio.create_task(sim_loop.run())
+    simulation_loop_running.set(1)
     print("[simulation] sim loop started")
 
     # Start periodic background cleanup for rate limiters
@@ -50,6 +68,7 @@ async def lifespan(app: FastAPI):
     cleanup_task.cancel()
     if sim_loop:
         await sim_loop.stop()
+    simulation_loop_running.set(0)
     await close_redis()
 
 
@@ -59,6 +78,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# ── Prometheus auto-instrumentation ──────────
+# Exposes /metrics with HTTP request count, duration histograms, etc.
+Instrumentator().instrument(app).expose(app)
 
 # ── Middleware (order: Rate Limit -> CORS) ──
 app.add_middleware(SimRateLimitMiddleware)
@@ -101,6 +124,7 @@ async def start():
         return {"success": False, "message": "Sim loop already running"}
     sim_loop = SimLoop()
     asyncio.create_task(sim_loop.run())
+    simulation_loop_running.set(1)
     return {"success": True, "message": "Sim loop started"}
 
 
@@ -109,4 +133,5 @@ async def stop():
     if not sim_loop or not sim_loop.running:
         return {"success": False, "message": "Sim loop not running"}
     await sim_loop.stop()
+    simulation_loop_running.set(0)
     return {"success": True, "message": "Sim loop stopped"}

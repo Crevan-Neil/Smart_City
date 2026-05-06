@@ -12,6 +12,8 @@ volumes:
   redis_data:
   backend_node_modules:
   frontend_node_modules:
+  prometheus_data:
+  grafana_data:
 
 services:
 
@@ -194,3 +196,59 @@ services:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
     command: npm run dev -- --host
+
+  # ── 6. PROMETHEUS ────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: city_prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle          # allows hot-reload via POST /-/reload
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts:/etc/prometheus/alerts:ro
+      - prometheus_data:/prometheus
+    networks:
+      - city_net
+    depends_on:
+      - backend
+      - simulation
+      - ai_service
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── 7. GRAFANA ───────────────────────────────
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: city_grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: smartcity
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - city_net
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5

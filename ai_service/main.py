@@ -1,17 +1,21 @@
 # ─────────────────────────────────────────────
 #  ai_service/main.py — FastAPI entry point
 #  Gen AI microservice:
-#    POST /chat   → streaming SSE chat
-#    POST /alert  → anomaly narration
+#    POST /chat    → streaming SSE chat
+#    POST /alert   → anomaly narration
 #    POST /command → NL → sim job params
+#    GET  /metrics → Prometheus scrape endpoint
 # ─────────────────────────────────────────────
 
 import os
 import asyncio
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Histogram
 
 from config import settings
 from database import init_db, close_db
@@ -19,6 +23,16 @@ from routes.chat import router as chat_router
 from routes.alert import router as alert_router
 from routes.command import router as command_router
 from middleware.rate_limiter import RateLimitMiddleware, cleanup_all_limiters
+
+# ── Custom Prometheus metrics ─────────────────
+
+# Histogram — LLM call duration (labelled by provider and model)
+llm_response_duration_seconds = Histogram(
+    "llm_response_duration_seconds",
+    "Time taken for the LLM to return a complete response",
+    labelnames=["provider", "model"],
+    buckets=[0.5, 1, 2, 5, 10, 20, 30, 60],
+)
 
 
 # ── Lifespan: startup + shutdown ──────────────
@@ -50,6 +64,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# ── Prometheus auto-instrumentation ──────────
+# Exposes /metrics with HTTP request count, duration histograms, etc.
+Instrumentator().instrument(app).expose(app)
 
 # ── Middleware (order: Rate Limit -> CORS) ──
 app.add_middleware(RateLimitMiddleware)

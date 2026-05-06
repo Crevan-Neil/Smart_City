@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────
 //  server.js — Express + Socket.io entry point
 //  Updated with full security middleware stack
+//  + Prometheus metrics via prom-client
 // ─────────────────────────────────────────────
 
 import "dotenv/config";
@@ -8,6 +9,7 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
+import client from "prom-client";
 
 import { connectMongo, connectInflux } from "./config/db.js";
 import { connectRedis } from "./config/redis.js";
@@ -35,6 +37,54 @@ import {
   simLimiter,
   checkSocketLimit,
 } from "./middleware/rateLimiter.js";
+
+// ── Prometheus setup ──────────────────────────
+// Collect default metrics: CPU, memory, event loop lag, GC, etc.
+const register = new client.Registry();
+client.collectDefaultMetrics({ register, prefix: "nodejs_" });
+
+// Counter — total HTTP requests (labelled by method, route, status)
+const httpRequestsTotal = new client.Counter({
+  name: "http_requests_total",
+  help: "Total number of HTTP requests",
+  labelNames: ["method", "route", "status"],
+  registers: [register],
+});
+
+// Histogram — request duration in seconds
+const httpRequestDuration = new client.Histogram({
+  name: "http_request_duration_seconds",
+  help: "HTTP request duration in seconds",
+  labelNames: ["method", "route", "status"],
+  buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5],
+  registers: [register],
+});
+
+// Gauge — live WebSocket connection count
+export const wsConnectionsActive = new client.Gauge({
+  name: "websocket_connections_active",
+  help: "Number of active WebSocket connections",
+  registers: [register],
+});
+
+// ── Metrics request-tracking middleware ───────
+function metricsMiddleware(req, res, next) {
+  const end = httpRequestDuration.startTimer();
+  res.on("finish", () => {
+    // Normalize dynamic route segments (/api/buildings/123 → /api/buildings/:id)
+    const route = req.route?.path
+      ? `${req.baseUrl || ""}${req.route.path}`
+      : req.path;
+    const labels = {
+      method: req.method,
+      route,
+      status: res.statusCode,
+    };
+    httpRequestsTotal.inc(labels);
+    end(labels);
+  });
+  next();
+}
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -71,7 +121,15 @@ app.use(express.json({ limit: "50kb" })); // 3. Body parse with size limit
 app.use(mongoSanitizeMiddleware);      // 4. Strip NoSQL injection chars
 app.use(securityLogger);               // 5. Log suspicious patterns
 app.use(inputLengthGuard);             // 6. Reject oversized fields
-app.use("/api", apiLimiter);           // 7. Global rate limit on all /api routes
+app.use(metricsMiddleware);            // 7. Track request metrics
+app.use("/api", apiLimiter);           // 8. Global rate limit on all /api routes
+
+// ── Prometheus metrics endpoint ───────────────
+// No auth, no rate limit — only reachable inside Docker network by Prometheus
+app.get("/metrics", async (_req, res) => {
+  res.set("Content-Type", register.contentType);
+  res.end(await register.metrics());
+});
 
 // ── Health check (no auth, no rate limit) ─────
 app.get("/health", (_req, res) =>
@@ -119,11 +177,13 @@ io.on("connection", async (socket) => {
     return;
   }
 
+  wsConnectionsActive.inc();
   console.log(`[socket] client connected — ${socket.id} (${ip})`);
 
-  socket.on("disconnect", () =>
-    console.log(`[socket] client disconnected — ${socket.id}`)
-  );
+  socket.on("disconnect", () => {
+    wsConnectionsActive.dec();
+    console.log(`[socket] client disconnected — ${socket.id}`);
+  });
 
   // Reject any client-sent events with large payloads
   socket.use(([event, ...args], next) => {
