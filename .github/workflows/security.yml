@@ -1,0 +1,147 @@
+name: Security Scan
+
+# ─────────────────────────────────────────────
+#  Runs on every push and weekly on a schedule.
+#  Scans for:
+#    - Leaked secrets (TruffleHog)
+#    - npm dependency vulnerabilities (npm audit)
+#    - Python dependency vulnerabilities (pip-audit)
+#    - Docker image vulnerabilities (Trivy)
+# ─────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  # Run every Monday at 08:00 UTC to catch new CVEs
+  schedule:
+    - cron: "0 8 * * 1"
+
+jobs:
+  # ── Secrets scan ─────────────────────────────
+  secrets:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history needed for TruffleHog
+
+      - name: TruffleHog secret scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+
+  # ── Node.js dependency audit ─────────────────
+  npm-audit:
+    name: npm Audit (Backend)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Audit backend dependencies
+        working-directory: backend
+        # --audit-level=high fails only on high/critical CVEs
+        run: |
+          npm ci
+          npm audit --audit-level=high
+
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: |
+          npm ci
+          npm audit --audit-level=high
+
+  # ── Python dependency audit ───────────────────
+  pip-audit:
+    name: pip-audit (Python services)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit simulation dependencies
+        working-directory: simulation
+        run: pip-audit -r requirements.txt --ignore-vuln PYSEC-2022-43012
+
+      - name: Audit ai_service dependencies
+        working-directory: ai_service
+        run: pip-audit -r requirements.txt --ignore-vuln PYSEC-2022-43012
+
+  # ── Docker image vulnerability scan ──────────
+  trivy:
+    name: Trivy Image Scan
+    runs-on: ubuntu-latest
+    # Only run on main pushes where images were just built
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    strategy:
+      matrix:
+        service: [backend, simulation, ai_service, frontend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build image for scanning
+        run: |
+          docker build ./${{ matrix.service }} \
+            -t smart-city-${{ matrix.service }}:scan
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: smart-city-${{ matrix.service }}:scan
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          # Only fail on CRITICAL vulnerabilities
+          severity: CRITICAL
+
+  # ── OWASP Dependency Check ────────────────────
+  owasp:
+    name: OWASP Dependency Check
+    runs-on: ubuntu-latest
+    # Weekly only — this scan is slow (5-10 min)
+    if: github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: "smart-city-twin"
+          path: "."
+          format: "HTML"
+          args: >
+            --enableRetired
+            --failOnCVSS 8
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owasp-report
+          path: reports/

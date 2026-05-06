@@ -1,0 +1,43 @@
+# .github/labeler.yml
+# Auto-labels PRs based on which files were changed
+# Used by the pr-checks.yml labeler step
+
+backend:
+  - changed-files:
+      - any-glob-to-any-file: "backend/**"
+
+frontend:
+  - changed-files:
+      - any-glob-to-any-file: "frontend/**"
+
+simulation:
+  - changed-files:
+      - any-glob-to-any-file: "simulation/**"
+
+ai_service:
+  - changed-files:
+      - any-glob-to-any-file: "ai_service/**"
+
+models:
+  - changed-files:
+      - any-glob-to-any-file: "models/**"
+
+infrastructure:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docker-compose.yml"
+          - "**/Dockerfile"
+          - ".github/**"
+
+security:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/middleware/security*"
+          - "**/middleware/rateLimiter*"
+          - "**/middleware/rate_limiter*"
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**.md"
+          - "**.txt"

@@ -1,0 +1,94 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "frontend/**"
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  # ── Job 1: Lint + Build ─────────────────────
+  build:
+    name: Lint & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: frontend
+        run: npm run lint --if-present
+
+      - name: Type check (if TypeScript)
+        working-directory: frontend
+        run: npm run type-check --if-present
+
+      - name: Build production bundle
+        working-directory: frontend
+        # Use placeholder URLs for CI build check
+        # Real URLs are set in Vercel environment variables
+        env:
+          VITE_API_URL: https://smart-city-backend.onrender.com
+          VITE_SOCKET_URL: https://smart-city-backend.onrender.com
+          VITE_AI_URL: https://smart-city-ai.onrender.com
+        run: npm run build
+
+      - name: Check bundle size
+        working-directory: frontend
+        run: |
+          du -sh dist/
+          echo "Build successful ✓"
+
+      # Upload built assets so deploy job can use them
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 1
+
+  # ── Job 2: Deploy to Vercel ─────────────────
+  deploy:
+    name: Deploy to Vercel
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: frontend
+          vercel-args: "--prod"

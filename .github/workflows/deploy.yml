@@ -1,0 +1,101 @@
+name: Deploy to Render
+
+# ─────────────────────────────────────────────
+#  Triggers a rolling deploy on Render after
+#  all service CI pipelines pass on main.
+#
+#  Each service has its own Render deploy hook
+#  URL stored as a GitHub secret.
+#
+#  Services deploy in dependency order:
+#    1. simulation  (no deps on other services)
+#    2. ai_service  (reads MongoDB, Redis)
+#    3. backend     (depends on sim + ai being alive)
+# ─────────────────────────────────────────────
+
+on:
+  # Only deploy when CI pipelines succeed on main
+  workflow_run:
+    workflows:
+      - "Backend CI"
+      - "Simulation CI"
+      - "AI Service CI"
+    branches: [main]
+    types: [completed]
+
+jobs:
+  deploy:
+    name: Deploy all services
+    runs-on: ubuntu-latest
+    # Only deploy if all triggering workflows succeeded
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Deploy simulation service
+        run: |
+          echo "Deploying simulation..."
+          curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK_SIMULATION }}" \
+            -o /dev/null -w "HTTP %{http_code}\n"
+
+      - name: Wait for simulation to be healthy
+        run: |
+          echo "Waiting for simulation health check..."
+          for i in {1..20}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "${{ secrets.RENDER_SIMULATION_URL }}/health" || echo "000")
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "Simulation is healthy ✓"
+              break
+            fi
+            sleep 15
+          done
+
+      - name: Deploy AI service
+        run: |
+          echo "Deploying ai_service..."
+          curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK_AI }}" \
+            -o /dev/null -w "HTTP %{http_code}\n"
+
+      - name: Wait for AI service to be healthy
+        run: |
+          echo "Waiting for AI service health check..."
+          for i in {1..20}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "${{ secrets.RENDER_AI_URL }}/health" || echo "000")
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "AI service is healthy ✓"
+              break
+            fi
+            sleep 15
+          done
+
+      - name: Deploy backend service
+        run: |
+          echo "Deploying backend..."
+          curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}" \
+            -o /dev/null -w "HTTP %{http_code}\n"
+
+      - name: Wait for backend to be healthy
+        run: |
+          echo "Waiting for backend health check..."
+          for i in {1..20}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "${{ secrets.RENDER_BACKEND_URL }}/health" || echo "000")
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "Backend is healthy ✓"
+              break
+            fi
+            sleep 15
+          done
+
+      - name: Deployment complete
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✓ All services deployed successfully"
+          echo "  Backend:    ${{ secrets.RENDER_BACKEND_URL }}"
+          echo "  Simulation: ${{ secrets.RENDER_SIMULATION_URL }}"
+          echo "  AI Service: ${{ secrets.RENDER_AI_URL }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
