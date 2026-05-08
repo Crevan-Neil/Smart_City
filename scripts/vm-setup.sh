@@ -12,8 +12,8 @@
 
 set -euo pipefail
 
-REPO_OWNER="crevan-neil"
-REPO_NAME="smart-city"
+REPO_OWNER="Crevan-Neil"
+REPO_NAME="Smart_City"
 
 echo "════════════════════════════════════════"
 echo "  Smart City VM Bootstrap"
