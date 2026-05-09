@@ -9,7 +9,7 @@ import { io } from "socket.io-client";
 import useCityStore from "../store/cityStore";
 import useAuthStore from "../store/authStore";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:3001";
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
 
 let socketInstance = null; // singleton — one connection for the app lifetime
 
@@ -36,7 +36,6 @@ export function useSocket() {
     initialised.current = true;
 
     socketInstance = io(SOCKET_URL, {
-      transports: ["websocket"],
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
       auth: { token },
