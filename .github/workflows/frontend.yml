@@ -51,7 +51,7 @@ jobs:
         env:
           VITE_API_URL: http://${{ secrets.AZURE_VM_HOST }}
           VITE_SOCKET_URL: http://${{ secrets.AZURE_VM_HOST }}
-          VITE_AI_URL: http://${{ secrets.AZURE_VM_HOST }}
+          VITE_AI_URL: http://${{ secrets.AZURE_VM_HOST }}/ai
         run: npm run build
 
       - name: Check bundle size
