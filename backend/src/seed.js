@@ -67,6 +67,46 @@ const buildings = [
     type: "utility",
     sensors: ["energy"],
   },
+  {
+    entityId: "bldF",
+    name: "Innovation & Incubation Center",
+    coords: { lat: 13.3422, lng: 74.7432 },
+    scenePosition: { x: 30, y: 0, z: -10 },
+    floorCount: 3,
+    maxCapacity: 250,
+    type: "academic",
+    sensors: ["energy", "temperature", "air_quality"],
+  },
+  {
+    entityId: "bldG",
+    name: "Indoor Sports Complex",
+    coords: { lat: 13.3425, lng: 74.7428 },
+    scenePosition: { x: 30, y: 0, z: 10 },
+    floorCount: 2,
+    maxCapacity: 500,
+    type: "utility",
+    sensors: ["energy", "temperature"],
+  },
+  {
+    entityId: "bldH",
+    name: "Central Cafeteria",
+    coords: { lat: 13.3410, lng: 74.7415 },
+    scenePosition: { x: -30, y: 0, z: 0 },
+    floorCount: 2,
+    maxCapacity: 400,
+    type: "utility",
+    sensors: ["energy", "air_quality"],
+  },
+  {
+    entityId: "bldI",
+    name: "Campus Medical Center",
+    coords: { lat: 13.3414, lng: 74.7410 },
+    scenePosition: { x: -30, y: 0, z: -20 },
+    floorCount: 2,
+    maxCapacity: 150,
+    type: "admin",
+    sensors: ["energy", "temperature"],
+  },
 ];
 
 const junctions = [
@@ -76,6 +116,20 @@ const junctions = [
     coords: { lat: 13.3405, lng: 74.7422 },
     scenePosition: { x: 0, y: 0, z: 20 },
     defaultPhaseDuration: 30,
+  },
+  {
+    entityId: "jxn2",
+    name: "East Wing Junction",
+    coords: { lat: 13.3418, lng: 74.7435 },
+    scenePosition: { x: 30, y: 0, z: 20 },
+    defaultPhaseDuration: 25,
+  },
+  {
+    entityId: "jxn3",
+    name: "Library Circle",
+    coords: { lat: 13.3416, lng: 74.7428 },
+    scenePosition: { x: 15, y: 0, z: 0 },
+    defaultPhaseDuration: 40,
   },
 ];
 

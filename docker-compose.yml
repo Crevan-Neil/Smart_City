@@ -7,7 +7,6 @@ networks:
     driver: bridge
 
 volumes:
-  mongo_data:
   influx_data:
   redis_data:
   backend_node_modules:
@@ -18,26 +17,6 @@ volumes:
 services:
 
   # ── 1. INFRASTRUCTURE ──────────────────────
-
-  mongodb:
-    image: mongo:7
-    container_name: city_mongo
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASS:-citypass}
-      MONGO_INITDB_DATABASE: smart_city
-    volumes:
-      - mongo_data:/data/db
-    networks:
-      - city_net
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -116,7 +95,7 @@ services:
       - "3001:3001"
     environment:
       PORT: 3001
-      MONGO_URI: mongodb://${MONGO_USER:-admin}:${MONGO_PASS:-citypass}@city_mongo:27017/smart_city?authSource=admin
+      MONGO_URI: ${MONGO_URI}
       REDIS_URL: redis://city_redis:6379
       REDIS_CHANNEL: city:live
       INFLUX_URL: http://city_influx:8086
@@ -130,8 +109,6 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
       NODE_ENV: development
     depends_on:
-      mongodb:
-        condition: service_healthy
       redis:
         condition: service_healthy
       influxdb:
@@ -154,15 +131,13 @@ services:
     ports:
       - "8001:8001"
     environment:
-      MONGO_URI: mongodb://${MONGO_USER:-admin}:${MONGO_PASS:-citypass}@city_mongo:27017/smart_city?authSource=admin
+      MONGO_URI: ${MONGO_URI}
       REDIS_URL: redis://city_redis:6379
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_MODEL: ${LLM_MODEL:-gemini-3-flash-preview}
       JWT_SECRET: ${JWT_SECRET}
       PYTHONUNBUFFERED: 1
     depends_on:
-      mongodb:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
