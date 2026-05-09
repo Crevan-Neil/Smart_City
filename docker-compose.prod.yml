@@ -10,7 +10,7 @@
 #  Key differences from docker-compose.yml (dev):
 #   - Pulls images from GHCR instead of building locally
 #   - NO local MongoDB (uses MongoDB Atlas M0 via MONGO_URI)
-#   - NO frontend container (served by Azure Static Web Apps)
+#   - Frontend hosted locally on VM (proxy via Nginx)
 #   - NO hot-reload volume mounts
 #   - Adds Nginx reverse proxy on port 80
 #   - Memory limits set for B1s (1 GB RAM total)
@@ -178,9 +178,25 @@ services:
         limits:
           memory: 200M
 
+  # ── 5.5 FRONTEND ──────────────────────────────
+
+  frontend:
+    image: ghcr.io/crevan-neil/smart-city-frontend:latest
+    container_name: city_frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost/api
+    networks:
+      - city_net
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+
   # ── 6. NGINX (reverse proxy) ──────────────────
-  # Exposes port 80 on the VM. Routes traffic to backend/ai/sim.
-  # The React frontend is served from Azure Static Web Apps CDN.
+  # Exposes port 80 on the VM. Routes traffic to backend/ai/sim/frontend.
+  # The React frontend is served locally.
 
   nginx:
     image: nginx:1.25-alpine
@@ -196,6 +212,7 @@ services:
       - backend
       - ai_service
       - simulation
+      - frontend
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
       interval: 15s
