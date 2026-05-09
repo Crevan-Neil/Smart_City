@@ -28,6 +28,7 @@ export async function startRedisSubscriber({ subscriberClient }) {
 
   subscriberClient.on("message", async (channel, raw) => {
     if (channel !== CHANNEL) return;
+    console.log(`[redis-sub] received update for ${channel}`);
 
     let event;
     try {

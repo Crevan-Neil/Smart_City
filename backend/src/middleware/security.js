@@ -40,7 +40,7 @@ export const helmetMiddleware = helmet({
       styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc:        ["'self'", "https://fonts.gstatic.com"],
       imgSrc:         ["'self'", "data:", "blob:"],
-      connectSrc:     ["'self'", "ws:", "wss:"],       // WebSocket for Socket.io
+      connectSrc:     ["*"],       // Allow all for VM setup
       workerSrc:      ["'self'", "blob:"],             // Three.js workers
     },
   },
