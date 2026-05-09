@@ -92,7 +92,7 @@ const httpServer = http.createServer(app);
 // ── Socket.io ─────────────────────────────────
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+    origin: "*", // Allow all origins for VM deployment
     methods: ["GET", "POST"],
   },
   // Limit payload size to prevent memory attacks
