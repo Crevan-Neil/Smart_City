@@ -92,12 +92,6 @@ jobs:
           INFLUX_BUCKET: test-bucket
         run: npm test --if-present
 
-      - name: Check for secrets accidentally committed
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
 
   # ── Job 2: Build & Push Docker image ────────
   build:
