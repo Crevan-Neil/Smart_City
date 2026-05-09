@@ -202,7 +202,7 @@ async function seed() {
     process.exit(1);
   }
 
-  await mongoose.connect(uri);
+  await mongoose.connect(uri, { dbName: "smart_city" });
   console.log("[seed] connected to MongoDB\n");
 
   // ── Buildings ──
