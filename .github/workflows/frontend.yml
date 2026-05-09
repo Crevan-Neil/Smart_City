@@ -91,6 +91,6 @@ jobs:
           push: true
           tags: ghcr.io/crevan-neil/smart-city-frontend:latest
           build-args: |
-            VITE_API_URL=http://${{ secrets.AZURE_VM_HOST }}/api
+            VITE_API_URL=http://${{ secrets.AZURE_VM_HOST }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
