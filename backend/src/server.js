@@ -92,8 +92,9 @@ const httpServer = http.createServer(app);
 // ── Socket.io ─────────────────────────────────
 const io = new Server(httpServer, {
   cors: {
-    origin: "*", // Allow all origins for VM deployment
+    origin: (origin, callback) => callback(null, true), // Dynamic whitelist
     methods: ["GET", "POST"],
+    credentials: true,
   },
   // Limit payload size to prevent memory attacks
   maxHttpBufferSize: 1e5,   // 100 KB

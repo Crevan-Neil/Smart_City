@@ -22,7 +22,7 @@ const ALLOWED_ORIGINS = (process.env.CLIENT_ORIGIN || "http://localhost:5173")
 // Strictly whitelist the frontend origin.
 // In production, replace with your real domain.
 export const corsMiddleware = cors({
-  origin: "*", // Allow all for VM setup
+  origin: true, // Mirror the request origin (fixes the '*' conflict with credentials)
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
