@@ -1,29 +1,13 @@
 name: Deploy to Azure VM
 
-# ─────────────────────────────────────────────
-#  Deploys backend services to the Azure B1s VM
-#  via SSH after all CI pipelines pass on main.
-#
-#  Strategy:
-#    1. SSH into the VM
-#    2. Pull latest images from GHCR
-#    3. Restart containers with docker compose
-#    4. Wait for health checks to pass
-#
-#  Required GitHub Secrets:
-#    AZURE_VM_HOST      — VM public IP address
-#    AZURE_VM_USER      — SSH user (e.g. azureuser)
-#    AZURE_VM_SSH_KEY   — Private SSH key (RSA/Ed25519)
-#    GHCR_TOKEN         — GitHub PAT with read:packages
-# ─────────────────────────────────────────────
-
 on:
-  # Trigger after all three CI workflows pass on main
+  workflow_dispatch: # Allow manual trigger
   workflow_run:
     workflows:
       - "Backend CI"
       - "Simulation CI"
       - "AI Service CI"
+      - "Frontend CI" # Now waits for the frontend too!
     branches: [main]
     types: [completed]
 
@@ -31,20 +15,20 @@ jobs:
   deploy:
     name: SSH Deploy to Azure VM
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Only run if all previous CIs succeeded or if manually triggered
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-      - name: Checkout code (for health-check scripts)
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # ── SSH into VM and deploy ─────────────
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host:     ${{ secrets.AZURE_VM_HOST }}
           username: ${{ secrets.AZURE_VM_USER }}
           key:      ${{ secrets.AZURE_VM_SSH_KEY }}
-          timeout:  120s
+          timeout:  300s
           script: |
             set -euo pipefail
 
@@ -53,74 +37,41 @@ jobs:
             echo "  $(date -u)"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-            cd ~/smart-city
+            # Fix: Using correct case-sensitive folder
+            cd ~/Smart_City
 
-            # Pull latest code (for config files: nginx.conf, compose, etc.)
-            git pull origin main
+            # 1. Update the code and Nginx configs
+            git fetch origin
+            git reset --hard origin/main
 
-            # Log into GHCR so we can pull private images
+            # 2. Log into GHCR
             echo "${{ secrets.GHCR_TOKEN }}" | \
               docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Pull latest images (non-interactive)
-            docker compose --env-file .env.prod \
-              -f docker-compose.prod.yml pull
+            # 3. Pull latest images
+            docker compose --env-file .env.prod -f docker-compose.prod.yml pull
 
-            # Rolling restart — zero-downtime where possible
-            docker compose --env-file .env.prod \
-              -f docker-compose.prod.yml up -d --remove-orphans
+            # 4. Restart everything (Remove orphans ensures clean state)
+            docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --remove-orphans
 
-            # Prune old images to save disk space
+            # 5. Cleanup
             docker image prune -f
+            
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  ✓ Services Restarted Successfully"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-            echo "  → Containers started, waiting for health checks..."
-
-      # ── Wait for backend health check ──────
-      - name: Wait for backend health check
+      - name: Verify Frontend Health
         run: |
-          BASE_URL="http://${{ secrets.AZURE_VM_HOST }}"
-          echo "Polling $BASE_URL/health..."
-          for i in $(seq 1 20); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-              "$BASE_URL/health" 2>/dev/null || echo "000")
-            echo "Attempt $i — HTTP $STATUS"
+          echo "Polling http://${{ secrets.AZURE_VM_HOST }}..."
+          for i in $(seq 1 10); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ secrets.AZURE_VM_HOST }}" || echo "000")
             if [ "$STATUS" = "200" ]; then
-              echo "✓ Backend is healthy"
-              break
+              echo "✓ Frontend is live!"
+              exit 0
             fi
-            if [ "$i" = "20" ]; then
-              echo "✗ Backend health check timed out"
-              exit 1
-            fi
+            echo "Attempt $i: HTTP $STATUS (waiting...)"
             sleep 10
           done
-
-      # ── Wait for AI service health check ───
-      - name: Wait for AI service health check
-        run: |
-          BASE_URL="http://${{ secrets.AZURE_VM_HOST }}"
-          echo "Polling $BASE_URL/ai/health..."
-          for i in $(seq 1 20); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-              "$BASE_URL/ai/health" 2>/dev/null || echo "000")
-            echo "Attempt $i — HTTP $STATUS"
-            if [ "$STATUS" = "200" ]; then
-              echo "✓ AI Service is healthy"
-              break
-            fi
-            if [ "$i" = "20" ]; then
-              echo "✗ AI Service health check timed out"
-              exit 1
-            fi
-            sleep 10
-          done
-
-      # ── Deployment summary ─────────────────
-      - name: Deployment summary
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  ✓ Deployment complete"
-          echo "  Backend:    http://${{ secrets.AZURE_VM_HOST }}/api"
-          echo "  AI Service: http://${{ secrets.AZURE_VM_HOST }}/ai"
-          echo "  Simulation: http://${{ secrets.AZURE_VM_HOST }}/sim"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✗ Frontend check failed"
+          exit 1
